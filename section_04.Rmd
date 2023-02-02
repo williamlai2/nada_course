@@ -1,0 +1,86 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+# libraries-----------------------------------------------------------
+source("NADA2_online_3_9/Class Data/Loadlibs.R")
+library(tidyverse)
+library(glue)
+```
+
+```{r}
+# data --------------------------------------------------------
+data_folder <- "NADA2_online_3_9/Class Data"
+
+zinc <- read.csv(glue("{data_folder}/Zinc.txt"), sep = "") %>% 
+  as_tibble()
+
+load(glue("{data_folder}/TCEReg.rda"))
+
+data("ShePyrene")
+```
+
+# Censored box plots
+
+```{r}
+cboxplot(zinc$Zn, zinc$ZnLT, zinc$Zone)
+
+# on a log scale
+cboxplot(zinc$Zn, zinc$ZnLT, zinc$Zone, LOG = TRUE) 
+
+# with bottom portion estimated with ROS
+cboxplot(zinc$Zn, zinc$ZnLT, zinc$Zone, LOG = TRUE, show = TRUE)
+```
+
+# Censored xy plot
+
+```{r}
+as_tibble(TCEReg)# PopAbv shows 1 as detected
+
+cenxyplot(TCEReg$PopDensity,
+          1-TCEReg$PopAbv1, # one minus as PopAbv shows 1 as detected
+          TCEReg$TCEConc,
+          TCEReg$TCECen,
+          xlab = "Population Density",
+          ylab = "TCE Concentration",
+          log = "y") 
+# circles for detected and dashed lines for non-detect
+```
+
+# CDF plot
+
+```{r}
+cen_ecdf(zinc$Zn, zinc$ZnLT, zinc$Zone) # cdf by group
+
+cen_ecdf(zinc$Zn, zinc$ZnLT, zinc$Zone, logscale = TRUE, ylab = "Zinc concentration in ug/L")
+
+```
+# Compare CDFs
+
+* lowest BIC is best
+* Normal not appropriate for this data
+
+
+```{r}
+# cdf for one dataset to view distributions --------------------------
+as_tibble(ShePyrene)
+
+cenCompareCdfs(ShePyrene$Pyrene, ShePyrene$PyreneCen) # with normal
+cenCompareCdfs(ShePyrene$Pyrene, ShePyrene$PyreneCen, dist3 = "weibull") # with weibull
+
+
+```
+
+# QQ plots
+
+* default is a lognormal comparison
+* Shapiro-Francia W is a modified R^2
+
+
+```{r}
+cenQQ(ShePyrene$Pyrene, ShePyrene$PyreneCen) # single
+cenCompareQQ(ShePyrene$Pyrene, ShePyrene$PyreneCen) # three distributions
+```
+
