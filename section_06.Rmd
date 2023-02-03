@@ -1,0 +1,150 @@
+---
+title: "Section 6. Intervals (Confidence, Prediction, Tolerance)"
+output: html_notebook:
+  toc: true
+---
+
+```{r}
+# libraries-----------------------------------------------------------
+source("NADA2_online_3_9/Class Data/Loadlibs.R")
+library(tidyverse)
+library(glue)
+```
+
+```{r}
+# data --------------------------------------------------------
+data_folder <- "NADA2_online_3_9/Class Data"
+
+data("ShePyrene")
+```
+
+
+# Confidence intervals
+
+## Kaplan-Meier
+
+* t.LCL and UCL assume normality
+* Pct.LCL and UCL (percentile)
+* BCa.LCL and UCL (biased correction) -- do not use if more than 40% non-detect
+
+Bootstrap CI reflects the skewness properly.
+
+Kaplan-Meier uses the data, while MLE uses the model.
+
+```{r}
+# envstats
+km_ci <- enparCensored(ShePyrene$Pyrene,
+              ShePyrene$PyreneCen,
+              ci = TRUE, # two sided by default
+              ci.method = "bootstrap",
+              n.bootstraps = 5000)
+
+print(km_ci)
+```
+
+## MLE
+
+Would run if more sure that it is lognormally distributed.
+
+```{r}
+# nada -- assumes lognormal by default
+pyr_mle_ci <- cenmle(ShePyrene$Pyrene,
+                     ShePyrene$PyreneCen,
+                     conf.int = 0.95)
+
+mean(pyr_mle_ci)
+print(pyr_mle_ci)
+```
+
+```{r}
+# assuming gaussian
+cenmle(ShePyrene$Pyrene,
+                     ShePyrene$PyreneCen,
+                     dist = "gaussian")
+
+```
+
+```{r}
+# envstats
+pyr_mle_envstats_ci <- elnormAltCensored(ShePyrene$Pyrene,
+                                      ShePyrene$PyreneCen,
+                                      ci = TRUE,
+                                      ci.method = "bootstrap",
+                                      n.bootstraps = 5000)
+
+print(pyr_mle_envstats_ci)
+```
+
+## ROS
+
+```{r}
+# envstats
+pyr_ros_envstats_ci <- elnormAltCensored(ShePyrene$Pyrene,
+                                      ShePyrene$PyreneCen,
+                                      method = "rROS",
+                                      ci = TRUE,
+                                      ci.method = "bootstrap",
+                                      n.bootstraps = 5000)
+
+print(pyr_ros_envstats_ci)
+```
+
+# Prediction intervals
+
+Want to see if new observations have changed from background (what is already there). Where you would be 95% sure of where new observations would fall.
+
+## MLE
+
+* Note that the normal LPL here is negative, so you wouldn't use it
+* Would choose which dist using BIC - see section 5
+
+```{r}
+# NADA
+cenPredInt(ShePyrene$Pyrene, ShePyrene$PyreneCen) # as a df!!!!
+```
+
+## ROS
+
+The more observations that you want to predict for, the wider the observation
+
+```{r}
+cenPredInt(ShePyrene$Pyrene, ShePyrene$PyreneCen, newobs = 2, method = "rROS")
+```
+
+
+# Tolerance intervals
+
+* 90th percentile of data
+* 95% UTL so that we're 95% confident that the 90th percentile should not be higher than this number
+* the plot helps to choose which value to choose
+* smallest BIC is best - here it is the lognormal
+
+## Lognormal, gamma and normal
+
+```{r}
+# nada
+cenTolInt(ShePyrene$Pyrene, ShePyrene$PyreneCen)
+```
+
+
+## Lognormal MLE
+
+Takes logs, computes stats, then transforms back
+
+```{r}
+# envstats
+lnorm_mle_envstats_ti <- eqlnormCensored(ShePyrene$Pyrene, ShePyrene$PyreneCen, p = 0.9, ci = TRUE, ci.type = "upper")
+print(lnorm_mle_envstats_ti)
+```
+
+## Gamma MLE
+```{r}
+dat_gamma <- ShePyrene$Pyrene^(1/3) # cube root
+obj_gamma <- eqnormCensored(dat_gamma, ShePyrene$PyreneCen, p = 0.9, ci = TRUE, ci.type = "upper")
+pct_gamma <- obj_gamma$quantiles^3 # cube the 90th percentile
+ti_gamma <- (obj_gamma$interval$limits[2])^3 # cube the upper limit
+
+pct_gamma
+ti_gamma
+```
+
