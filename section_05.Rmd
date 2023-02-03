@@ -1,0 +1,104 @@
+---
+title: "Section 05 - Estimating Descriptive Statistics"
+output: html_notebook:
+  toc: true
+---
+
+```{r}
+# libraries-----------------------------------------------------------
+source("NADA2_online_3_9/Class Data/Loadlibs.R")
+library(tidyverse)
+library(glue)
+```
+
+```{r}
+# data --------------------------------------------------------
+data_folder <- "NADA2_online_3_9/Class Data"
+
+data("ShePyrene")
+```
+
+# MLE (lognormal dist)
+
+
+## In NADA
+
+```{r}
+# just a summary first
+censummary(ShePyrene$Pyrene, ShePyrene$PyreneCen)
+```
+
+```{r}
+# the mle
+pyr_mle <- cenmle(ShePyrene$Pyrene, ShePyrene$PyreneCen)
+pyr_mle
+```
+
+
+## In Envstats
+```{r}
+pyr_mle_envstats <- elnormAltCensored(ShePyrene$Pyrene,
+                                      ShePyrene$PyreneCen,
+                                      ci = TRUE,
+                                      ci.method = "bootstrap",
+                                      n.bootstraps = 1000)
+print(pyr_mle_envstats)
+```
+
+# Kaplan-Meier
+
+## In NADA
+
+```{r}
+pyr_km <- cenfit(ShePyrene$Pyrene, ShePyrene$PyreneCen)
+pyr_km 
+```
+
+## In Envstats
+
+
+```{r}
+# non parametric? -- see the Rros version for the elnormAltCensored version
+pyr_km_envstats <- enparCensored(ShePyrene$Pyrene,
+                                      ShePyrene$PyreneCen,
+                                      ci = TRUE,
+                                      ci.method = "bootstrap",
+                                      n.bootstraps = 1000)
+
+print(pyr_km_envstats)
+```
+
+# Regression on Order Statistics
+
+## NADA
+
+```{r}
+pyr_ros <- cenros(ShePyrene$Pyrene, ShePyrene$PyreneCen)
+summary(pyr_ros)
+
+# the kaplan-meier stats
+mean(pyr_ros)
+sd(pyr_ros)
+quantile(pyr_ros)
+plot(pyr_ros) # qqplot -- the top shows the probability of exceedance
+```
+
+```{r}
+# some quick stats -- noting that the estimate of the mean here for the KM has a small bias upward
+# author suggests using the Envstats version
+censtats(ShePyrene$Pyrene, ShePyrene$PyreneCen) 
+```
+
+
+## Envstats
+```{r}
+pyr_ros_envstats <- elnormAltCensored(ShePyrene$Pyrene,
+                                      ShePyrene$PyreneCen,
+                                      ci = TRUE,
+                                      ci.method = "bootstrap",
+                                      n.bootstraps = 1000,
+                                      method = "rROS")
+
+pyr_ros_envstats
+```
+
