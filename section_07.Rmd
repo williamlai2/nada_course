@@ -1,0 +1,115 @@
+---
+title: "Section 7. Matched Pair Tests & Comparing Data to Standards"
+output: html_notebook:
+  toc: true
+---
+
+```{r}
+# libraries-----------------------------------------------------------
+source("NADA2_online_3_9/Class Data/Loadlibs.R")
+library(tidyverse)
+library(glue)
+library(coin)
+```
+
+```{r}
+# data --------------------------------------------------------
+data_folder <- "NADA2_online_3_9/Class Data"
+
+load(glue("{data_folder}/SedHg.RData"))
+load(glue("{data_folder}/EppSedHg.Rda"))
+```
+
+# Matched pair tests
+
+## Sign test
+
+Whether the first is different from the second. Want the Fong correction for ties.
+
+```{r}
+as_tibble(EppSedHg)
+
+# two sided
+cen_signtest(EppSedHg$Hg2001, EppSedHg$Cens01, EppSedHg$Hg1996, EppSedHg$Cens96)
+
+# one-sided higher
+cen_signtest(EppSedHg$Hg2001, EppSedHg$Cens01, EppSedHg$Hg1996, EppSedHg$Cens96, alternative = "greater")
+```
+
+## Signed rank test
+
+* Generally has more power than the sign test when the magnitude of difference is meaningful (most of the time).
+* Computes the differences and ranks them according to absolute value.
+* Ties discarded (Pratt correction for ties)
+* Test statistic = sum of the positive signed ranks / standard deviation. 
+* Small p.value so reject the null hypothesis and would say it is different (would expect 2001 to be higher than 1996)
+
+```{r}
+# two-sided
+cen_signedranktest(EppSedHg$Hg2001, EppSedHg$Cens01, EppSedHg$Hg1996, EppSedHg$Cens96)
+
+# one-sided higher
+cen_signedranktest(EppSedHg$Hg2001, EppSedHg$Cens01, EppSedHg$Hg1996, EppSedHg$Cens96, alternative = "greater")
+```
+
+## Paired Prentice Wilcoxon test
+
+* Non-parametric test
+* more power than the sign and signed-rank tests when differences are asymmetric (often for enviro data)
+* built to handle ties
+* similar to a paired t-test on scores
+
+
+
+```{r}
+# two sided
+ppw.test(EppSedHg$Hg2001, EppSedHg$Cens01, EppSedHg$Hg1996, EppSedHg$Cens96) # cannot reject HA. med diff is 0.015
+
+# one.sided higher
+ppw.test(EppSedHg$Hg2001, EppSedHg$Cens01, EppSedHg$Hg1996, EppSedHg$Cens96, alternative = "greater") # again cannot reject
+```
+
+## Censored paired test
+
+* a parametric test
+* a censored version of a paired t-test of means
+* assumes that the paired differences have a normal dist (check with a qq plot)
+* if non-normal (differences) p-values may be too high
+* if p-values are low then probably fine
+* one-sided LCL against zero, but could also compare to a non-zero such as a standard
+* done using MLE
+
+Output includes graphs:
+* data distribution
+* qq plot
+* pp plot
+
+In this example the data does not look like it is from a normal distribution
+
+```{r}
+# two sided
+cen_paired(EppSedHg$Hg2001, EppSedHg$Cens01, EppSedHg$Hg1996, EppSedHg$Cens96)
+
+# one sided also available
+```
+
+## Fixing non-normality
+
+* use a non-parametric test
+* could take logs, but then no longer testing on the mean
+* permutation test on mean difference
+
+
+## Comparing to a standard
+
+* instead of a second column, just put in a number
+* LCL95 compared to the standard
+
+```{r}
+# does the mean of 2001 Hg concentrations exceed a standard of 0.01?
+cen_paired(EppSedHg$Hg2001, EppSedHg$Cens01, 0.1, alt = "greater")
+
+# in this case, p-value is small so reject H0 of equality. Mean exceeds standard.
+```
+
+
