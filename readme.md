@@ -2,8 +2,12 @@
 
 https://practicalstats.com/training/nada.php
 
+## Datasets
 Data from: https://practicalstats.com/resources/NADA-resources/NADA2-Online-3_9.zip
 
+Use the dataset_downloads.R script to download the datasets if needed
+
+## Outline
 * Section 1. Get Started with RStudio
 * Section 2. Detection and Reporting Limits
 * Section 3. Store Censored Data in Databases
