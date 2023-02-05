@@ -24,7 +24,7 @@ Use the `dataset_downloads.R` script to download the datasets if needed
 * Section 12. Logistic Regression
 * Section 13. Multivariate Methods with Nondetects
 
-# Methods for censored data
+## Methods for censored data
 
 | Method            | Parametric                   | Non-Parametric |
 |-------------------|------------------------------|----------------|
