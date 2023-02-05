@@ -9,7 +9,6 @@ output: html_notebook:
 source("NADA2_online_3_9/Class Data/Loadlibs.R")
 library(tidyverse)
 library(glue)
-library(coin)
 ```
 
 ```{r}
@@ -18,6 +17,12 @@ data_folder <- "NADA2_online_3_9/Class Data"
 
 load(glue("{data_folder}/SedHg.RData"))
 load(glue("{data_folder}/EppSedHg.Rda"))
+
+# these for the exercises
+load(glue("{data_folder}/Example1.RData"))
+load(glue("{data_folder}/Example2.RData"))
+load(glue("{data_folder}/Example3.RData"))
+data(Atra)
 ```
 
 # Matched pair tests
@@ -112,4 +117,129 @@ cen_paired(EppSedHg$Hg2001, EppSedHg$Cens01, 0.1, alt = "greater")
 # in this case, p-value is small so reject H0 of equality. Mean exceeds standard.
 ```
 
+# Comparing data with non-detects to a standard
+
+* Can fit a skewed distribution (MLE or rROS) to the data and test whether the data fit the standard or not
+* one sided LCL95 or UCL95
+* could bootstrap if > 20 observations
+* if n < 20 then best fit (MLE)
+* if n >= 20 then use Kaplan-Meier (non-parametric) or best fitting dist 
+* if n > 70 could use t-test, but no benefit compared to bootstrap
+* dist is hardly ever normal when there are non-detects
+* BIC better than PPCC or Shapiro Wilk as it evaluates the entire distribution shape, the cdf.
+* if negative numbers are part of fitted dist, use second highest PPCC or SW, then use the second highest instead of normal
+
+## one sample tests
+
+* just confidence intervals
+* H0 assumes compliance when using LCL
+* H0 assumes non-compliance when using UCL
+
+
+## Exercises
+
+1a. Compare Data to a Standard Using a Matched Pair Test
+
+```{r}
+# see if arsenic concentrations exceed the drinking water standard of 10 ug/L
+cen_paired(Example1$Arsenic, Example1$NDisTRUE, 10, alt = "greater")
+# p value is large so cannot reject H0 that Arsenic does not exceed standard
+```
+
+1b. Test for Differences in Two Paired Columns of Data
+
+```{r}
+# test whether atrazine concentrations were the same in June v September. 
+# Test both for differences in the mean and well differences in the cdfs and medians
+
+cen_paired(Atra$June, Atra$JuneCen, Atra$Sept, Atra$SeptCen) # test for mean difference
+# cannot reject H0 that mean diff is zero
+
+cen_signtest(Atra$June, Atra$JuneCen, Atra$Sept, Atra$SeptCen) # test for median
+# also cannot reject H0 that median diff is zero using Fong correction
+
+cen_signedranktest(Atra$June, Atra$JuneCen, Atra$Sept, Atra$SeptCen) # cdf test
+# this has more poser to see differences.
+# p-value low so can reject H0 of no difference. This test finds a diff between datasets (higher in Sep)
+```
+
+1c. Comparing Data to Standards Using an Upper Confidence Limit
+
+```{r}
+# summary
+censummary(Example1$Arsenic, Example1$NDisTRUE) # 21 samples - a bit small
+
+# boxplot
+cboxplot(Example1$Arsenic, Example1$NDisTRUE, show = TRUE) # showing values below detection limit (most of them)
+
+# compare cdfs to decide on the distribution
+cenCompareCdfs(Example1$Arsenic, Example1$NDisTRUE, Yname = "Arsenic Concentration in ug/L") # gamma has lowest BIC
+```
+
+```{r}
+# compute UCL95 using MLE
+egam_mle <- egammaAltCensored(Example1$Arsenic,
+                          Example1$NDisTRUE,
+                          ci = TRUE,
+                          ci.type = "upper",
+                          ci.method = "normal.approx")
+print(egam_mle)
+```
+
+```{r}
+# compute UCL95 using bootstrap
+# non parametric method chosen with bootstrap
+# computes kaplan meier as we have 2/3 of data as non detects
+egam_bs <- enparCensored(Example1$Arsenic, 
+                          Example1$NDisTRUE,
+                          ci = TRUE,
+                          ci.type = "upper",
+                          ci.method = "bootstrap",
+                          n.bootstraps = 5000)
+print(egam_bs)
+
+```
+
+2a. Computation of a UCL95 for data with both detected and non-detected values, DL unknown.
+
+```{r}
+# lowest reported was 0.1229 so assumed that all ND are lower than this
+
+
+# MIBK is methyl isobutyl ketone
+mibk_ucl95 <- elnormAltCensored(Example2$MIBK,
+                                Example2$MIBKcen,
+                                method = "rROS",
+                                ci = TRUE,
+                                ci.method = "bootstrap",
+                                ci.type = "upper",
+                                n.bootstraps = 5000)
+
+print(mibk_ucl95) # not as good as with lab provided limit, but still useful to use lowest detected when estimating
+```
+
+```{r}
+# with reporting limit provided by lab of 0.029
+mibk2_ucl95 <- elnormAltCensored(Example2$MIBK2,
+                                Example2$MIBK2cen,
+                                method = "rROS",
+                                ci = TRUE,
+                                ci.method = "bootstrap",
+                                ci.type = "upper",
+                                n.bootstraps = 5000)
+
+print(mibk2_ucl95) # better with lab provided limit
+```
+
+3a. Compute when all are ND
+
+```{r}
+# know that all detection limits are below 10 ppb for arsenic in drinking water
+# compute Maximum Concentration Limit (MCL)
+# 0 of 14 exceed the MCL as the detection limits are below the MCL
+
+binom.test(0, 14, alternative = "less") # 0 successes from 14 trials in one-sided binom test
+# conf int is 0 to 0.192 
+# so we can say with 95% probability that no more than 19.2% of concentrations exceed the MCL
+```
 

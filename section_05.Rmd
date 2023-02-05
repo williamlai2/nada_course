@@ -41,7 +41,7 @@ pyr_mle_envstats <- elnormAltCensored(ShePyrene$Pyrene,
                                       ShePyrene$PyreneCen,
                                       ci = TRUE,
                                       ci.method = "bootstrap",
-                                      n.bootstraps = 1000)
+                                      n.bootstraps = 5000)
 print(pyr_mle_envstats)
 ```
 
@@ -63,7 +63,7 @@ pyr_km_envstats <- enparCensored(ShePyrene$Pyrene,
                                       ShePyrene$PyreneCen,
                                       ci = TRUE,
                                       ci.method = "bootstrap",
-                                      n.bootstraps = 1000)
+                                      n.bootstraps = 5000)
 
 print(pyr_km_envstats)
 ```
@@ -96,7 +96,7 @@ pyr_ros_envstats <- elnormAltCensored(ShePyrene$Pyrene,
                                       ShePyrene$PyreneCen,
                                       ci = TRUE,
                                       ci.method = "bootstrap",
-                                      n.bootstraps = 1000,
+                                      n.bootstraps = 5000,
                                       method = "rROS")
 
 pyr_ros_envstats

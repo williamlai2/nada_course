@@ -1,0 +1,97 @@
+---
+title: "Section 8. Two-Group Tests with Nondetects"
+output: html_notebook:
+  toc: true
+---
+
+```{r}
+# libraries-----------------------------------------------------------
+source("NADA2_online_3_9/Class Data/Loadlibs.R")
+library(tidyverse)
+library(glue)
+```
+
+```{r}
+# data --------------------------------------------------------
+data_folder <- "NADA2_online_3_9/Class Data"
+
+zinc <- read.csv(glue("{data_folder}/Zinc.txt"), sep = "") %>% 
+  as_tibble()
+
+load(glue("{data_folder}/TCE2.RData"))
+```
+
+# Methods for testing differences between groups
+
+* Parametric tests - tests for means - must assume distributions that matches data 
+* Non-parametric - tests for percentiles - no shape necessary
+* Simpler tests - convert to above or below detection limit - non param
+
+# Parametric ('t-test' by regression)
+
+* Regression of concentrations v group if
+* Concentration = intercept + slope * factor
+* is one group different to the other? HO of not diff
+* parametric and assumes normal dist 
+* could take logs 
+
+```{r}
+censummary(zinc$Zn, zinc$ZnLT, factor(zinc$Zone))
+```
+
+
+
+```{r}
+cboxplot(zinc$Zn, zinc$ZnLT, zinc$Zone, minmax = TRUE, show = TRUE)
+```
+
+## With MLE in normal units
+
+```{r}
+cen2means(zinc$Zn, zinc$ZnLT, zinc$Zone, LOG = FALSE) 
+# does not find evidence that the two means differ
+# but not a normal distribution -- estimates < 0
+```
+## With a permutation test 
+
+```{r}
+cenperm2(zinc$Zn, zinc$ZnLT, zinc$Zone) # better and values make sence
+# still reject H0 and can say that they are diff
+```
+
+## With MLE in log units
+
+```{r}
+cen2means(zinc$Zn, zinc$ZnLT, zinc$Zone, LOG = TRUE) 
+# still rejects log normality
+# finds no difference in means again
+```
+
+# Non parametric tests for censored data
+
+* extend the Wilcoxon rank-sum tests to censored data
+* score and rank are essentially Kaplan-Meier
+* R version is called the 'Peto-Peto' test
+* test of whether the survival curves (KM percentages) are the same for all groups
+
+```{r}
+cen1way(zinc$Zn, zinc$ZnLT, zinc$Zone)
+# low p-value - can reject H0 and say that they are diff
+```
+
+```{r}
+# the emperical cdf
+cen_ecdf(zinc$Zn, zinc$ZnLT, zinc$Zone) # top part of the box (above 35th percentile) is diff
+```
+
+# Simpler methods
+
+* Might use if you want to give a simple demonstration, but otherwise don't do
+* Contingency tables for less than highest DL and higher than DL - loses information but simple
+
+```{r}
+# chi squared value finds a difference in the data
+chisq.test(xtabs(~TCE2$Density + TCE2$Below5Cens)) 
+```
+
+

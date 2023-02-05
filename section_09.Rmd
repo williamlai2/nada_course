@@ -1,0 +1,277 @@
+---
+title: "Section 9. Three+ Group Tests with Nondetects"
+output: html_notebook:
+  toc: true
+---
+
+```{r}
+# libraries-----------------------------------------------------------
+source("NADA2_online_3_9/Class Data/Loadlibs.R")
+library(tidyverse)
+library(glue)
+```
+
+```{r}
+# data --------------------------------------------------------
+data_folder <- "NADA2_online_3_9/Class Data"
+
+load(glue("{data_folder}/PollenThia.RData"))
+
+# for exercises
+load(glue("{data_folder}/Golden.Rda"))
+```
+
+# The dataset
+
+```{r}
+# Ontario Pollen Monitoring Network pesticide concentrations
+Pollen_Thia
+```
+```{r}
+# Do thiamethoxam conentrations differ in pollen between four stages of plant growth?
+cboxplot(Pollen_Thia$Thiamethoxam, 
+         Pollen_Thia$ThiaCens, 
+         Pollen_Thia$SamplingEvent,
+         Ylab = "Thiamethoxam in ppb",
+         Xlab = "Sampling event",
+         show = TRUE,
+         Ymax = 20, # big outlier
+         minmax = TRUE)
+
+# natural logs
+cboxplot(Pollen_Thia$Thiamethoxam, 
+         Pollen_Thia$ThiaCens, 
+         Pollen_Thia$SamplingEvent,
+         Ylab = "Thiamethoxam",
+         Xlab = "Sampling event",
+         show = TRUE,
+         LOG = TRUE,
+         minmax = TRUE)
+```
+
+# Methods for testing between groups
+
+## Parametric 'ANOVA' using censored regression
+
+* tests for whether there is a variance in means between groups
+* estimate of the difference in the mean logs
+
+
+* Start with observed data (including ND) and choice of distribution
+* given observed data, what values for params are most likely to have given rise to the data?
+* for censored data, the fit is to the proportion below the detection limit and how they change as X changes in value
+* use QQ plot of resids to evaluate whether Y var is on the correct scale with Shapiro-Francia test
+* computes a log-likelihood of a 'no model' fit compared to one with a 'model' fit with the explanatory variables
+
+
+```{r}
+cenanova(Pollen_Thia$Thiamethoxam, 
+         Pollen_Thia$ThiaCens, 
+         Pollen_Thia$SamplingEvent) # by default is mean of natural logs
+# the ones with small p values differ from others -- check groups
+```
+
+* multiple comparison tests allows to set individual error to control for false positive rate and to see which groups differ from the others. sort of an updated version of Bonferroni correction. 
+* Decreasing alpha values with more groups.
+
+```{r}
+pairwise.t.test(Pollen_Thia$Thiamethoxam, Pollen_Thia$SamplingEvent, p.adjust.method = "BH") # differs from bonferroni
+```
+
+
+```{r}
+# can run in original units too -- but unreliable !!!!
+cenanova(Pollen_Thia$Thiamethoxam, 
+         Pollen_Thia$ThiaCens, 
+         Pollen_Thia$SamplingEvent,
+         LOG = FALSE)
+
+# values are below zero in normal distribution so not recommended
+
+# use permutation test instead
+# compares data collected to the other permutations
+cenpermanova(Pollen_Thia$Thiamethoxam, 
+         Pollen_Thia$ThiaCens, 
+         Pollen_Thia$SamplingEvent) # more realistic
+```
+
+## Nonparametric Peto-Peto test
+
+* extends the Kruskal-Wallis test to censored data
+* scores are computed for the detected data and the censored data separately
+* no distribution assumed
+* log-likelihood model computed from scores
+* no values substituted for NDs
+* Peto-Peto tests whether the cdfs are the same for all groups
+* if Chi-Sq is small and p-value is large, no sig diff
+
+```{r}
+cen1way(Pollen_Thia$Thiamethoxam, 
+         Pollen_Thia$ThiaCens, 
+         Pollen_Thia$SamplingEvent)
+
+# uses BH adjustment
+```
+
+```{r}
+# plot of the CDFs on a normal scale
+cen_ecdf(Pollen_Thia$Thiamethoxam, 
+         Pollen_Thia$ThiaCens, 
+         Pollen_Thia$SamplingEvent)
+
+# plot of the CDFs on a log scale
+cen_ecdf(log(Pollen_Thia$Thiamethoxam), 
+         Pollen_Thia$ThiaCens, 
+         Pollen_Thia$SamplingEvent,
+         xlim = c(min(log(Pollen_Thia$Thiamethoxam)), max(log(Pollen_Thia$Thiamethoxam)))) # more lower nums
+```
+
+## Simpler nonparametric tests
+
+* recensor to highest DL and use standard nonparametric tests
+* would categorise to highest DL and use Kruskal-Wallis
+* use with caution though.
+
+```{r}
+# demo purposes
+Pollen_Thia %>%
+  mutate(ThiaCens = Thiamethoxam < 0.05)  # not needed here, but if there was more than one DL 
+
+chisq.test(xtabs(~Pollen_Thia$ThiaAbvBelow + Pollen_Thia$SamplingEvent)) 
+```
+
+Better than chi-square, but better to use the other methods
+
+```{r}
+Pollen_Thia %>% 
+  group_by(SamplingEvent) %>% 
+  summarise(abv = 1 - mean(as.numeric(ThiaCens))) %>% 
+  ggplot(aes(SamplingEvent, abv)) +
+  geom_col() +
+  labs(y = "Prop above 0.05",
+       x = "Sampling event")
+```
+
+```{r}
+# could also use Kruskal-Wallis to recode nondetects
+p2 <- Pollen_Thia %>% 
+  # diff steps
+  mutate(below05 = Thiamethoxam) %>% # concentrations and DLs to start
+  mutate(below05 = if_else(ThiaCens == 1, -1, below05), # censored to -1
+         below05 = if_else(Thiamethoxam < 0.05, -1, below05)) # below highest DL (0.05) to -1
+  
+kruskal.test(p2$below05~p2$SamplingEvent)
+
+```
+
+# Exercises
+
+* The `Golden.rda` data present lead concentrations in organs of herons after exposing them to lead. 
+* There are four dosage groups (“Dosage” or “Group” columns), zero plus three amounts of lead.
+* The objective is to determine if feathers or another non-destructive part of the birds could be used as an environmental indicator so it would not be necessary to sacrifice a bird in order to measure their lead concentrations. 
+
+
+```{r}
+Golden
+```
+
+## Livers
+
+```{r}
+# summary
+censummary(Golden$Liver, Golden$LiverCen, Golden$Group)
+
+# boxplot
+cboxplot(Golden$Liver, Golden$LiverCen, Golden$Group, show = TRUE, minmax = TRUE) # the usual one
+cboxplot(Golden$Liver, Golden$LiverCen, Golden$Group, show = TRUE, LOG = TRUE, minmax = TRUE) # the usual one - logged
+cenboxplot(Golden$Liver, Golden$LiverCen, Golden$Group, show = TRUE) # diff type
+```
+
+### Non parametric approach
+
+```{r}
+# compare dist using peto-peto
+cen1way(Golden$Liver, Golden$LiverCen, Golden$Group) # diff but not stat sig??
+```
+
+Empirical CDFs show that the two higher groups differ in percentile compared to the two lower ones (esp. in the normal ECDF), but they all differ a bit (in the logged ECDF).
+
+```{r}
+# empirical cdf normal values
+cen_ecdf(Golden$Liver,
+         Golden$LiverCen,
+         Golden$Group) 
+
+# empirical cdf logged values
+cen_ecdf(log(Golden$Liver),
+         Golden$LiverCen,
+         Golden$Group,
+         xlim = c(min(log(Golden$Liver)), max(log(Golden$Liver)))) # more lower nums
+```
+
+### parametric approach
+
+```{r}
+cenanova(Golden$Liver,
+         Golden$LiverCen,
+         Golden$Group) # some differences in groups 3 and 4
+# resid plot shows that logs are good to use
+```
+
+## Bone
+
+```{r}
+# summary
+censummary(Golden$Bone, Golden$BoneCen, Golden$Group)
+
+# boxplot
+cboxplot(Golden$Bone, Golden$BoneCen, Golden$Group, show = TRUE, LOG = TRUE, minmax = TRUE) # the usual one - logged
+```
+
+### Non parametric approach
+
+```{r}
+# compare dist using peto-peto
+cen1way(Golden$Bone, Golden$BoneCen, Golden$Group) # diff and stat sig
+```
+
+Like for livers, the Empirical CDFs for bones show that the two higher groups differ in percentile compared to the two lower ones (esp. in the normal ECDF), but they all differ a bit (in the logged ECDF).
+
+```{r}
+# empirical cdf normal values
+cen_ecdf(Golden$Bone,
+         Golden$BoneCen,
+         Golden$Group) 
+
+# empirical cdf logged values
+cen_ecdf(log(Golden$Bone),
+         Golden$BoneCen,
+         Golden$Group,
+         xlim = c(min(log(Golden$Bone)), max(log(Golden$Bone)))) # more lower nums
+```
+
+## Brain, Blood, Feather and Kidney 
+
+All pretty much the same as the others
+
+```{r}
+# empirical cdf normal values
+cen_ecdf(Golden$Brain,
+         Golden$BrainCen,
+         Golden$Group) 
+
+# empirical cdf normal values
+cen_ecdf(Golden$Blood,
+         Golden$BloodCen,
+         Golden$Group) 
+
+# empirical cdf normal values
+cen_ecdf(Golden$Feather,
+         Golden$FeatherCen,
+         Golden$Group) 
+
+# empirical cdf normal values
+cen_ecdf(Golden$Kidney,
+         Golden$KidneyCen,
+         Golden$Group) 
+```
