@@ -17,6 +17,9 @@ data_folder <- "NADA2_online_3_9/Class Data"
 
 load(glue("{data_folder}/Golden.Rda"))
 load(glue("{data_folder}/TCEReg.rda"))
+
+# exercises
+data("Recon")
 ```
 
 
@@ -106,7 +109,7 @@ ATS(Golden$Blood, Golden$BloodCen, Golden$Kidney, Golden$KidneyCen, retrans = TR
 ```
 
 
-# Multile regression with censored data
+# Multiple regression with censored data
 
 ## The dataset
 
@@ -203,5 +206,72 @@ Alternatively, use the `bestaic()` function.
 ```{r}
 # runs through all the models and prints the best 10
 bestaic(TCEReg$TCEConc, TCEReg$TCECen, xvar4b)
+```
+
+# Exercises
+
+## Multiple regression 
+
+```{r}
+Recon
+
+rc_lm <- lm (AtraConc ~ Area + Applic + PctCorn + SoilGp + Temp + Precip + Dyplant + Pctl, data = Recon)
+summary(rc_lm)
+
+vif(rc_lm) # all good
+```
+
+```{r}
+# all iv unstransformed
+rc8 <- Recon %>% 
+  dplyr::select(Area:Pctl)
+
+reg_rc8 <- cencorreg(Recon$AtraConc, Recon$AtraCen, rc8) # AIC 804
+summary(reg_rc8)
+```
+
+```{r}
+# partial plots
+partplots(Recon$AtraConc, Recon$AtraCen, rc8)
+# suggest PctCorn but prob best not to transform as log. not much to gain from the rest
+# could do cube root of it though, graph suggests poss beneficial
+```
+
+```{r}
+rc8b <- rc8 %>% 
+  mutate(cbrtPctCorn = PctCorn^(1/3)) %>% 
+  dplyr::select(-PctCorn)
+```
+
+
+
+```{r}
+# best aic - all untransformed
+bestaic(Recon$AtraConc, Recon$AtraCen, rc8)
+
+# best aic - cube root of corn
+bestaic(Recon$AtraConc, Recon$AtraCen, rc8b) # better
+```
+
+```{r}
+# hvae a look at the best
+rc5b <- rc8b %>% 
+  dplyr::select(Applic, Temp, Dyplant, Pctl, cbrtPctCorn)
+
+reg_rc5 <- cencorreg(Recon$AtraConc, Recon$AtraCen, rc5b)
+
+summary(reg_rc5) # looks good
+```
+
+## ATS line
+
+```{r}
+# just one independent variable
+ATS(Recon$AtraConc, Recon$AtraCen, Recon$Dyplant) # log units
+```
+
+```{r}
+# just one independent variable
+ATS(Recon$AtraConc, Recon$AtraCen, Recon$Dyplant, retrans = TRUE) # original units
 ```
 
