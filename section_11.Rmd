@@ -95,4 +95,55 @@ vif(cr_lm2) # all good
 
 ## Nonparametric trend tests with censored data
 
-vid 11b
+* based on ATS line
+* slope produces Kendall's tau of 0 for the residuals from the line
+
+## Single variable non parametric with time
+
+```{r}
+# if linear in original units, then log = false otherwise log = true (default) because fitting line
+ATS(Dairy_Creek_Chromium$`Total Recoverable Chromium`, Dairy_Creek_Chromium$CrND, Dairy_Creek_Chromium$dectime, LOG = FALSE) 
+# won't matter for tests but good for line
+# normal units may be easier to interpret depending on purpose
+# tau of -0.22 which is about -0.4 for Pearson's r
+# decrease of 0.036 ug/L of Chromium per year
+```
+
+## Nonparametric trend with covariate
+
+* compute smooth of censored y vs x where x is not time using a Generalised Additive Model (GAM)
+* GAMS are smoothed curves weighted combinations of multiple functions
+* compute an ATS on residuals. Kendall's tau a test of change in residuals over time
+* uses decimal time
+
+
+```{r}
+centrend(Dairy_Creek_Chromium$`Total Recoverable Chromium`, Dairy_Creek_Chromium$CrND, Dairy_Creek_Chromium$mean_daily_flow_cfs, Dairy_Creek_Chromium$dectime)
+# has plot of data with ND and GAM smooth
+# ATS on residuals shwos trend (p-value of 0.03) with Kendall's tau showing a decrease of 0.0225 per year
+# second plot shows resids from GAM
+```
+
+## Seasonal Kendall test on censored data
+
+* computes ATS line and test for each season separately
+* combines in to one overall seasonal Kendall test
+* test of consistent trend (if one season shows increasing significant trend then second shows decreasing, then cancel out and no overall SK trend)
+* does not compare data across different seasons
+* test statistic for each season is the Mann-Kendall test. sum up for overall
+
+```{r}
+# time first
+censeaken(Dairy_Creek_Chromium$dectime,
+          Dairy_Creek_Chromium$`Total Recoverable Chromium`,
+          Dairy_Creek_Chromium$CrND,
+          group = Dairy_Creek_Chromium$Season,
+          seaplots = TRUE) # for seasonal graphs
+
+# significant in dry season
+# not signifiant in wet
+# significant overall slope is -0.036 per year
+# histogram shows S permutations - time variable randomly shuffled thousands of times and DV is reassigned, then S computed for each shuffle
+```
+
+
