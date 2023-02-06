@@ -1,12 +1,14 @@
 # Nondetects And Data Analysis
 
+Nondetects And Data Analysis online course by Dennis R. Helsel, Practical Stats
+
 https://practicalstats.com/training/nada.php
 
 ## Datasets
 
 Data from: https://practicalstats.com/resources/NADA-resources/NADA2-Online-3_9.zip
 
-Use the `dataset_downloads.R` script to download the datasets if needed
+Use the `dataset_downloads.R` script to download these datasets if needed
 
 ## Outline
 
@@ -26,13 +28,13 @@ Use the `dataset_downloads.R` script to download the datasets if needed
 
 ## Methods for censored data
 
-| Method            | Parametric                   | Non-Parametric |
-|-------------------|------------------------------|----------------|
-| Descriptive stats | MLE                          | Kaplan-Meier   |
-| Intervals         | Bootstrap MLE                | Bootstrap K-M  |
-| Paired data       | CI on difference by MLE      | PPW            |
-| 2 indep gropus    | MLE regression on 0/1 factor | Peto-Peto      |
-| 3 indep groups    | MLE regression on 0/1 factor | Peto-Peto      |
-| Correlation       | Likelihood R by MLE          | Kendall's tau  |
-| Regression        | MLE regression               | ATS line       |
-|                   |                              |                |
+| Method            | Parametric                   | Non-Parametric           |
+|-------------------|------------------------------|--------------------------|
+| Descriptive stats | MLE                          | Kaplan-Meier             |
+| Intervals         | Bootstrap MLE                | Bootstrap K-M            |
+| Paired data       | CI on difference by MLE      | PPW                      |
+| 2 indep gropus    | MLE regression on 0/1 factor | Peto-Peto                |
+| 3 indep groups    | MLE regression on 0/1 factor | Peto-Peto                |
+| Correlation       | Likelihood R by MLE          | Kendall's tau            |
+| Regression        | MLE regression               | Akritas-Thiel_Sen line   |
+|                   |                              |                          |

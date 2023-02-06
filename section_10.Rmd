@@ -1,0 +1,207 @@
+---
+title: "Section 10. Correlation and Regression with Nondetects"
+output: html_notebook:
+  toc: true
+---
+
+```{r}
+# libraries-----------------------------------------------------------
+source("NADA2_online_3_9/Class Data/Loadlibs.R")
+library(tidyverse)
+library(glue)
+```
+
+```{r}
+# data --------------------------------------------------------
+data_folder <- "NADA2_online_3_9/Class Data"
+
+load(glue("{data_folder}/Golden.Rda"))
+load(glue("{data_folder}/TCEReg.rda"))
+```
+
+
+# Correlation, Regression and Multiple Regression
+
+```{r}
+# Is there a correlation between Pb in kidneys and blood?
+cenxyplot(Golden$Kidney, Golden$KidneyCen, Golden$Blood, Golden$BloodCen, xlab = "Lead in Heron Kidneys", ylab = "Lead in Heron Blood", lty = "dashed")
+# dashed lines represent the censored ranges
+
+```
+
+## MLE for correlation and regression
+
+* Start with observed data
+* Given observed data, what params (mean, SD, R^2) are most likely to have given rise to the data
+* For censored data, match observed by observed proportions below each detection limit
+* want to maximise the likelihood function using the probability function for observed values and the cdf for non-detects
+* diff distributions will change the results
+
+## Correlation coeffients for censored data
+
+* correlation coefs, but no necessarily on the same scale as Pearson's r - many are smaller in magnitude
+* based on log-liklihood, the measure of error for MLE methods or LRT, which determines whether the regression equation explains a significant amount of variation compared to null intercept only model
+* several suggested psuedo r^2 stats
+* can't compare coorelation coef, AIC, BIC or r2 between the two because of the different scale (like normal regression)
+
+### Likelihood Correlation Coefficient
+
+* uses G2 (the -2 log likelihood) so two times the difference log likelihoods between this and the null model
+* most reported in MLE
+* can be greater than one
+
+### Rescaled Likelihood Ration Correlation Coefficient
+
+* Rescale the likelihood ration so that it is between -1 and 1
+
+### McFadden's Correlation Coefficient
+
+* genrally below Likelihood R
+
+```{r}
+Pb_reg <- cencorreg(Golden$Blood, Golden$BloodCen, Golden$Kidney) # calculation and plot defaults with lognormal. plots produced
+
+Pb_reg # for use later
+summary(Pb_reg)
+```
+
+```{r}
+cencorreg(Golden$Blood, Golden$BloodCen, Golden$Kidney, LOG = FALSE) # done with normal units
+# use Shapiro-Francia W to decide between the two
+```
+
+
+### Plotting the regression line
+
+```{r}
+cenxyplot(Golden$Kidney, Golden$KidneyCen, Golden$Blood, Golden$BloodCen, xlab = "Pb in Kidneys", ylab = "PB in Blood", lty = "dashed")
+ik <- order(Golden$Kidney)
+lines(Golden$Kidney[ik],
+      exp(predict(Pb_reg)[ik]), # Pb_reg from earlier -- exp as predict is in logs
+      col = "red") 
+```
+
+```{r}
+cenxyplot(Golden$Kidney, Golden$KidneyCen, log(Golden$Blood), Golden$BloodCen, xlab = "Pb in Kidneys", ylab = "PB in Blood", lty = "dashed")
+ik <- order(Golden$Kidney)
+lines(Golden$Kidney[ik],
+      predict(Pb_reg)[ik], # Pb_reg from earlier 
+      col = "blue") 
+```
+
+## Nonparametric Correlation: Kendall's tau
+
+* not only linear relationships but all monotonic relationships
+* does not require normality of residuals
+* allows for censoring of X and Y
+* regression like with one X var, Akritas-Thiel-Sen line
+* looks at concordant pairs (pos slope) and discordant pairs (neg slope)
+* values are less than R^2
+* ties count as evidence for the null hypothesis and higher p-value
+* decide on log or original units based on plots. no normality test
+
+```{r}
+ATS(Golden$Blood, Golden$BloodCen, Golden$Kidney, Golden$KidneyCen) # logs by default
+ATS(Golden$Blood, Golden$BloodCen, Golden$Kidney, Golden$KidneyCen, retrans = TRUE) # original units
+```
+
+
+# Multile regression with censored data
+
+## The dataset
+
+The dataset has four detection limits for TCE (trichloroethelene) indicated by `TCECen` with the y variable being `TCEConc`. Some other independent variables on land use, pop density, industrial land use and depth.
+
+```{r}
+TCEReg
+```
+
+## Check for multicollinearity
+
+* avoid variables correlated with each other
+* measure using Variance Inflation Factor (VIF), want all to be <10
+
+```{r}
+tce_lm <- lm(TCEConc ~ LandUse + PopDensity + PctIndLU + Depth, data = TCEReg)
+summary(tce_lm)
+
+vif(tce_lm) # no multicollinearity here
+```
+
+```{r}
+# dependent vars separate
+xvar4 <- TCEReg %>% 
+  dplyr::select(LandUse:Depth)
+
+reg4 <- cencorreg(TCEReg$TCEConc, TCEReg$TCECen, xvar4) # AIC of 395.8, Rescaled Likelihood R2 of 0.13
+
+# also produces a qqplot of the residuals with Shapiro-Francia W
+
+# if run with LOG = FALSE, then original scale wtih lower SW score and less like normal dist.
+
+summary(reg4) 
+```
+
+## Transform independent variables
+
+* use partial plots
+* residuals from a regression of one indep var against the others 
+* sometimes called crPlots or adjusted-variable plots
+
+```{r}
+partplots(TCEReg$TCEConc, TCEReg$TCECen, xvar4) # logs are default
+# values for each of the xvars -- AICs for different transformations
+# suggests taking logs for population density
+```
+
+```{r}
+# four variables with lnPopDen
+xvar4b <- TCEReg %>% 
+  mutate(lnPopDen = log(PopDensity)) %>% 
+  dplyr::select(LandUse, lnPopDen, PctIndLU, Depth) 
+
+reg4b <- cencorreg(TCEReg$TCEConc, TCEReg$TCECen, xvar4b) # AIC of 388, Rescaled Likelihood R2 of 0.16 (better)
+
+summary(reg4b) 
+```
+
+## Find best set of x variables
+
+* find lowest AIC
+* drop vars one at a time
+
+```{r}
+#dropping pct ind land use as it had highest pvalue
+xvar3 <- xvar4b %>% 
+  dplyr::select(-PctIndLU)
+
+reg3 <- cencorreg(TCEReg$TCEConc, TCEReg$TCECen, xvar3) # AIC of 386, Rescaled Likelihood R2 of 0.16 (better)
+
+summary(reg3) 
+```
+
+```{r}
+#drop land use
+xvar2 <- xvar3 %>% 
+  dplyr::select(-LandUse)
+
+reg2 <- cencorreg(TCEReg$TCEConc, TCEReg$TCECen, xvar2) # AIC of 385.5, Rescaled Likelihood R2 of 0.16
+
+summary(reg2) 
+```
+
+```{r}
+# just one variable
+reg1 <- cencorreg(TCEReg$TCEConc, TCEReg$TCECen, log(TCEReg$PopDensity)) # AIC of 387, Rescaled Likelihood R2 of 0.37
+# higher AIC, better to choose two vars. This is the best BIC though, but probably underfits too much.
+
+summary(reg1) 
+```
+
+Alternatively, use the `bestaic()` function.
+
+```{r}
+# runs through all the models and prints the best 10
+bestaic(TCEReg$TCEConc, TCEReg$TCECen, xvar4b)
+```
+
