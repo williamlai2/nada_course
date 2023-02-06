@@ -36,5 +36,5 @@ Use the `dataset_downloads.R` script to download these datasets if needed
 | 2 indep gropus    | MLE regression on 0/1 factor | Peto-Peto                |
 | 3 indep groups    | MLE regression on 0/1 factor | Peto-Peto                |
 | Correlation       | Likelihood R by MLE          | Kendall's tau            |
-| Regression        | MLE regression               | Akritas-Thiel_Sen line   |
+| Regression        | MLE regression               | Akritas-Thiel-Sen line   |
 |                   |                              |                          |

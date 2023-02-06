@@ -1,0 +1,98 @@
+---
+title: "Section 11. Trend Analysis with Nondetects"
+output: html_notebook:
+  toc: true
+---
+
+```{r}
+# libraries-----------------------------------------------------------
+source("NADA2_online_3_9/Class Data/Loadlibs.R")
+library(tidyverse)
+library(glue)
+```
+
+```{r}
+# data --------------------------------------------------------
+data_folder <- "NADA2_online_3_9/Class Data"
+
+load(glue("{data_folder}/DairyCreekChromium.RData"))
+```
+
+
+# Parametric Trend Analysis
+
+* check for multicollinearity between independent variables - vif test
+* check residuals to see that they follow the assumed distribution
+* choose the model with the lowest AIC
+* uses decimal time
+
+## Dataset
+
+```{r}
+Dairy_Creek_Chromium
+
+censummary(Dairy_Creek_Chromium$`Total Recoverable Chromium`, as.logical(Dairy_Creek_Chromium$CrND))
+```
+
+## Single variable
+
+```{r}
+cencorreg(Dairy_Creek_Chromium$`Total Recoverable Chromium`, Dairy_Creek_Chromium$CrND, Dairy_Creek_Chromium$dectime)
+# default uses logs
+# slope is significant, showing a decrease of 5.9 per cent per year
+# plot and Shapiro-Francia W look fine
+```
+
+## Multiple regression, x and time
+
+```{r}
+xvar2 <- Dairy_Creek_Chromium %>% 
+  dplyr::select(dectime, mean_daily_flow_cfs)
+
+reg_cr <- cencorreg(Dairy_Creek_Chromium$`Total Recoverable Chromium`, Dairy_Creek_Chromium$CrND, xvar2) # smaller AIC
+
+summary(reg_cr) # trend and flow significant
+# decrease of 5.1 per cent per year
+
+
+```
+
+```{r}
+# check vif
+cr_lm <- lm(`Total Recoverable Chromium` ~ dectime + mean_daily_flow_cfs, data = Dairy_Creek_Chromium)
+vif(cr_lm) # all good
+```
+
+## Seasonal regression with sine and cosine
+
+* sine and cosine of 2 * pi * time in decimal years
+* one revolution every year (2 * pi * time)
+* can compare the AIC for models with and without the sine and cosine terms
+
+```{r}
+cos_t <- cos(2*pi*Dairy_Creek_Chromium$dectime)
+sin_t <- sin(2*pi*Dairy_Creek_Chromium$dectime)
+
+xvar4 <- tibble(Dairy_Creek_Chromium$dectime, Dairy_Creek_Chromium$mean_daily_flow_cfs, sin_t, cos_t)
+
+reg4 <- cencorreg(Dairy_Creek_Chromium$`Total Recoverable Chromium`, Dairy_Creek_Chromium$CrND, xvar4) 
+# AIC not as good as 2 var model
+# no significant seasonal variation
+# Shapiro-Francia not bad except for one point
+
+summary(reg4)
+```
+
+```{r}
+# check vif
+cr_lm2 <- lm(Dairy_Creek_Chromium$`Total Recoverable Chromium` ~ 
+               Dairy_Creek_Chromium$dectime + 
+               Dairy_Creek_Chromium$mean_daily_flow_cfs +
+               sin_t +
+               cos_t)
+vif(cr_lm2) # all good
+```
+
+## Nonparametric trend tests with censored data
+
+vid 11b
