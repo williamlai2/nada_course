@@ -1,0 +1,347 @@
+---
+title: "Section 12. Logistic Regression"
+output: html_notebook:
+  toc: true
+---
+
+```{r}
+# libraries-----------------------------------------------------------
+source("NADA2_online_3_9/Class Data/Loadlibs.R")
+library(tidyverse)
+library(glue)
+library(bestglm)
+library(rms)
+```
+
+```{r}
+# data --------------------------------------------------------
+data_folder <- "NADA2_online_3_9/Class Data"
+
+load(glue("{data_folder}/TCELogReg.rda"))
+
+# exercises
+load(glue("{data_folder}/ReconLogistic.RData"))
+```
+
+# Binary logistic regression
+
+* predicts the probability of getting a one (concentrations that are higher than the highest DL)
+* may want to know the probability of being above the threshold for some criteria
+* y is a logit (the log of the odds), so `y = log(prob(above)/prob(below))`
+* only assumes that the relationship between the logit and the x variable is linear
+
+## The dataset
+
+* `GT5` for >= 5. the dependent variable
+
+```{r}
+TCELogReg
+```
+
+# Logistic regression
+
+```{r}
+glm1 <- glm(GT5 ~ DEPTH + PctIND + POPDEN, data = TCELogReg, family = binomial(logit))
+summary(glm1)
+
+# null devialce 182.7 -- intercept only
+# resid deviance = 169.8 with 243 df -- this model
+# AIC 177.8
+
+```
+
+```{r}
+# the null model
+glm0 <- glm(GT5 ~ 1, data = TCELogReg, family = binomial(logit))
+summary(glm0)
+
+# compare null model to the original model using an overall Likelihood ratio test G
+anova(glm0, glm1, test = "Chisq") # p-value shows that the second model is better
+```
+
+## Model selection
+
+```{r}
+vif(glm1) # fine
+```
+
+## Test whether to transform x variables
+
+```{r}
+# from car pacakge
+residualPlots(glm1, type = "deviance") # some indication that POPDEN could be transformed from pvalue
+# plots themselves not great because of nature of logistic regression
+
+```
+
+* Box and Tidwell procedure - construct a new variable and add to regression to test
+* only for continuous variables only
+* if slope is significant, then transform variable and remove originals
+
+```{r}
+bt_tce <- TCELogReg %>% 
+  # only DEPTH and POPDEN - don't transform  percentage variables
+  mutate(bt_depth = DEPTH * log(DEPTH),
+         bt_popden = POPDEN * log(POPDEN),
+         sqrt_popden = sqrt(POPDEN),
+         ln_popden = log(POPDEN)) 
+
+glm2 <- glm(GT5 ~ DEPTH + PctIND + POPDEN + bt_depth + bt_popden, data = bt_tce, family = binomial(logit))
+summary(glm2) # no for depth, transformed popden is significant so use that instead of POPDEN
+
+# guide for possible transform
+as.vector(1 + (glm2$coefficients["bt_popden"]/glm2$coefficients["POPDEN"])) # ratio of 0.7 
+# so maybe use sqrt or log of popden?
+
+```
+
+```{r}
+# sqrt popden
+glm3 <- glm(GT5 ~ DEPTH + PctIND + sqrt_popden, data = bt_tce, family = binomial(logit))
+summary(glm3) # AIC 175
+
+```
+
+```{r}
+glm4 <- glm(GT5 ~ DEPTH + PctIND + ln_popden, data = bt_tce, family = binomial(logit))
+summary(glm4) # AIC 173 better
+```
+
+# Which variables to keep in the model
+
+* AIC = 2*num_parameters + residual deviance
+
+
+```{r}
+# removing PctIND
+glm5 <- glm(GT5 ~ DEPTH + ln_popden, data = bt_tce, family = binomial(logit))
+summary(glm5) # AIC 171 
+```
+
+
+```{r}
+anova(glm4, glm5, test = "Chisq") # p-value shows that the second model is better
+# residual deviance in second is lower and one fewer df. 
+# prob of getting that deviance if H0 (of simpler model being better) is 0.86 so no evidence to reject H0
+```
+
+```{r}
+# removing DEPTH
+glm6 <- glm(GT5 ~ ln_popden, data = bt_tce, family = binomial(logit))
+summary(glm6) # AIC 170
+
+```
+
+```{r}
+anova(glm4, glm6, test = "Chisq") # nothing much lost by dropping EPTH and PctInd
+anova(glm5, glm6, test = "Chisq") # nothing lost when dropping DEPTH
+
+```
+
+## Automated model selection
+
+```{r}
+TCE_best <- bt_tce %>% 
+  dplyr::select(PctIND, DEPTH, ln_popden, GT5) # requires dataset where the last column is the binary variable
+
+bestglm(TCE_best, family = binomial(logit), IC = "AIC")
+```
+
+## Interpreting coefficients
+
+* slope is 1.25 and variable is logged
+* as population density increases, the probability of getting a 1 (exceeding) increases
+* for a unit increase in log(POPDEN), the log-odds increase by 1.25, which is a 3.49 multiplier
+
+```{r}
+# best model
+summary(glm6)
+
+exp(glm6$coefficients["ln_popden"]) # e^1.2515 = 3.495
+```
+
+* supposing `glm5` was chosen
+* the slope of -0.0013 for DEPTH says the probability of TCE ?= 5 decreases as depth increases
+* for each unit increase in depth, there is an (e^-0.0013) - 0.9987 multiplier (or a 0.13% decrease) in the odds (p/(1-p)) for TCE >= 5.
+
+```{r}
+summary(glm5)
+
+exp(glm5$coefficients["DEPTH"]) # e^1.158548 = 0.9987
+```
+
+## Evaluate the chosen model
+
+* R^2 might help to decide whether to use the log of a variable or not (or sqrt or not)
+* Nagelkerke r^2 is a rescaled likelihood in logistic regression and tends to be a bit smaller than R^2 in standard regression
+
+### R^2
+
+```{r}
+# from rms package
+lrm6 <- lrm(GT5 ~ ln_popden, data = TCE_best)
+lrm6
+```
+
+### Plots and measures
+
+```{r}
+# plots from rms
+d6 <- datadist(TCE_best$ln_popden, TCE_best$GT5)
+options(datadist = "d6")
+## not sure if this works
+# plot(Predict(lrm6))
+
+
+d5 <- datadist(TCE_best$ln_popden, TCE_best$DEPTH, TCE_best$GT5)
+options(datadist = "d5")
+lrm5 <- lrm(GT5 ~ ln_popden + DEPTH, data = TCE_best)
+# # also doesn't work
+# plot(Predict(lrm5)) 
+
+```
+
+```{r}
+# diff graph
+pof1 <- exp(glm6$linear.predictors) / (1-exp(glm6$linear.predictors))
+
+psort <- order(TCE_best$ln_popden) # order
+plot(TCE_best$ln_popden,
+     TCE_best$GT5,
+     xlab = "ln(Population Density)",
+     ylab = "Prob TCE >= 5")
+lines(TCE_best$ln_popden[psort],
+      pof1[psort],
+      col = "blue")
+```
+
+### Predictive ability
+
+Best are:
+* best are Kendall's tau-b (tau adjusted for ties) - higher is better - use cor.test()
+* AUC - area under the curve - higher is better
+* Brier score - mean squared error of prediction - lower is better
+
+
+* `lrm()` Brier: Brier score
+* `lrm()` C: AUC
+* `lrm()` Dxy = Somer's Dxy
+* `lrm()` tau-a =  tau-a
+* `cor.test()` Kendall's tau: tab-b
+
+```{r}
+lrm6 # from earlier
+
+cor.test(glm6$linear.predictors, TCE_best$GT5, method = "kendall")
+```
+
+# Exercise
+
+Atrazine measured in streams. Reporting limit of 1 (`GT_1`). Land annd climate variables:
+
+* `APPLIC` - amount of pesticide applied
+* `CORNpct` - pct of basin planted in corn
+* `SOILGP` - soil permeability
+* `PRECIP` - amount of recent precipitation
+* `DYPLANT` - days since planting
+* `FPCTL` - percentile of streamflow
+* `TEMP` - supposely not meant to use this, but temp, not sure if C or F.
+
+Build the best logistic regression model.
+
+```{r}
+ReconLogistic
+```
+
+```{r}
+rl1 <- glm(GT_1 ~ . - TEMP, data = ReconLogistic, family = binomial(logit))
+summary(rl1) # AIC 259.9
+
+# soil, precip and applic prob not great
+
+vif(rl1) # fine
+```
+
+```{r}
+# compare to intercept only
+rl0 <- glm(GT_1 ~ 1 - TEMP, data = ReconLogistic, family = binomial(logit))
+summary(rl0) # AIC 560
+
+anova(glm0, glm1, test = "Chisq") # intercept only no good
+```
+
+
+```{r}
+# see whether to maybe transform
+residualPlots(rl1, type = "deviance") # perhaps DYPLANT and SOILGP
+```
+
+```{r}
+# box tidwell
+bt_rl <- ReconLogistic %>% 
+  # only DEPTH and POPDEN - don't transform  percentage variables
+  mutate(bt_dyplant = DYPLANT * log(DYPLANT),
+         bt_soil = SOILGP * log(SOILGP),
+         bt_precip = PRECIP * log(PRECIP)) 
+
+rl2 <- glm(GT_1 ~ ., data = bt_rl, family = binomial(logit))
+summary(rl2) # yes for dyplant, yes for soil # AIC 236
+
+# guide for possible transform
+as.vector(1 + (rl2$coefficients["bt_dyplant"]/rl2$coefficients["DYPLANT"])) #0.85
+as.vector(1 + (rl2$coefficients["bt_soil"]/rl2$coefficients["SOILGP"])) # 0.46
+as.vector(1 + (rl2$coefficients["bt_precip"]/rl2$coefficients["PRECIP"])) # 81.49
+
+vif(rl2) # bad vif -- just checking wouldn't use anyway
+```
+
+```{r}
+# use bt versions
+rl3 <- glm(GT_1 ~ CORNpct + bt_dyplant + FPCTL + APPLIC + bt_dyplant + bt_soil, data = bt_rl, family = binomial(logit))
+summary(rl3) # worse!!! AIC = 267
+```
+
+```{r}
+# drop APPLIC
+rl4 <- glm(GT_1 ~ CORNpct + PRECIP + FPCTL + DYPLANT + SOILGP, data = ReconLogistic, family = binomial(logit))
+summary(rl4) # AIC 258.7
+```
+
+```{r}
+# drop SOILGP
+rl5 <- glm(GT_1 ~ CORNpct + PRECIP + FPCTL + DYPLANT, data = ReconLogistic, family = binomial(logit))
+summary(rl5) # AIC 257.7 and everything signif
+```
+
+```{r}
+# drop CORNpct just to check
+rl6 <- glm(GT_1 ~ PRECIP + FPCTL + DYPLANT, data = ReconLogistic, family = binomial(logit))
+summary(rl6) # AIC 260.6 worse
+
+anova(glm6, glm5, test = "Chisq") # worse
+```
+
+```{r}
+# automated selection
+bestglm(ReconLogistic %>% 
+          dplyr::select(-TEMP), # not meant to use TEMP
+        family = binomial(logit),
+        IC = "AIC") # the same model
+
+```
+
+
+
+
+```{r}
+# best
+summary(rl5)
+
+# other scores
+lrm(GT_1 ~ CORNpct + PRECIP + DYPLANT + FPCTL, data = ReconLogistic)
+# Brier 0.81, AUC 0.932
+
+cor.test(rl5$linear.predictors, ReconLogistic$GT_1, method = "kendall")
+# tau-b 0.591
+```
+

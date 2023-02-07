@@ -1,0 +1,329 @@
+---
+title: "Section 13. Multivariate Methods with Nondetects"
+output: html_notebook:
+  toc: true
+---
+
+```{r}
+# libraries-----------------------------------------------------------
+source("NADA2_online_3_9/Class Data/Loadlibs.R")
+library(tidyverse)
+library(glue)
+library(bestglm)
+library(rms)
+library(readxl)
+```
+
+```{r}
+# data --------------------------------------------------------
+data_folder <- "NADA2_online_3_9/Class Data"
+
+FishDDT <- read_excel(glue("{data_folder}/FishDDT.xls"))
+load(glue("{data_folder}/FishDDTalt.rdata"))
+
+# exercises
+load(glue("{data_folder}/Markers.rdata"))
+```
+
+# Binary multivariate methods for censored data
+
+Three methods, all three put them on a scale that equalises the DV so that each has the same impact
+* convert data to binary detect/nondetect, 0 or 1
+* re-censor all values below the highest DL then rank within each variable and perform multivariate analyses on the ranks (ordinal approach)
+* use u-scores to develop relationships within multiply-censored variables
+
+## Types of multivariate models
+
+Inter-dependence (all variables equivalent) -- correlations between all the variables
+* NMDS - non metric multidimensional scaling
+* Clustering
+
+Dependence (response and explanatory variables)
+* ANOSIM - like a multivariate version of Kruskal-Wallis
+* Seriation (nonparametric correlation / trend test) - multivariate version of Kendall's tau
+
+## Distance or similarity matrix
+
+* big set of correlation coefficients
+* quantifies the similarity or distance between rows or between columns
+* matrix has triangular shape
+* distance measures include Euclidean and Bray-Curtis distances between points in multivariate space
+
+```{r}
+# measures for censored data
+tribble(~distance_measure, ~characteristic,
+        "simple matching (binomial)", "above/below RL",
+        "Euclidean distance (ordinal)", "ranks",
+        "Euclidean distance (Wilcoxon)", "u-scores")
+```
+
+## Dataset
+
+* orthogonal and parallel versions of DDD, DDE and DDT
+* `Age` (young v mature) and `Date` (decimal time)
+* indicators where 1 is a nondetect
+
+```{r}
+summary(FishDDT)
+```
+
+## NMDS on simple matching distances
+
+```{r}
+DDTcen <- FishDDT %>% 
+  dplyr::select(oD_LT1:pT_LT1)
+
+binaryMDS(DDTcen, FishDDT$Age, title = "NMDS of DDT in fish")
+
+# differentiation between young and mature fish along x axis
+# overlay due to ties between pairs
+# distances on triangular distance based on ranks
+```
+
+## ANOSIM - test group differences in patterns of 0/1s
+
+```{r}
+DDTdissim <- binaryDiss(DDTcen) # dissimilatity matrix without grouping variable
+
+# from vegan package
+ano_ddt <- anosim(DDTdissim, FishDDT$Age) # dissimilatity matrix as one of the inputs
+ano_ddt
+
+# anosim permutation test compares test statistic to lots of permutations after randomisation
+
+anosimPlot(ano_ddt) # hist of permuted values - the test statistic is higher than all permutations
+# pvalue is 0.001 as highest in 1000 permutations, so reject H0 that groups are the same and can say they are diff
+```
+
+## Clustering 0/1 data
+
+```{r}
+binaryClust(DDTcen, ncluster = 3) # young fish in left most, the others are mature
+```
+
+## Trend analysis for binary data
+
+```{r}
+time_dist <- dist(FishDDT$Date, method = "manhattan") # use Manhattan distance rather than Euclidean dist
+
+# mantel test using vegan package
+ddt_mannkendall <- mantel(time_dist, DDTdissim, method = "kendall", permutations = 999)
+ddt_mannkendall 
+# Mantel statistic based on Kendall's rank correlation tau = 0.151
+# shows quantiles of permutations
+
+# significant in the 0/1 pattern over time - like ANOSIM higher than almost all the permutations
+densityplot(permustats(ddt_mannkendall), main = "Multivariate Mann-Kendall Test")
+```
+
+# Ordinal multivariate methods
+
+* compute the distance measure then compute the same multivariate procedures as the binary approach
+* more precision than the binary approach
+* Euclidean distance used for distance on ranks
+
+```{r}
+new_fish <- FishDDT %>% 
+  dplyr::select(-Age, -Date)
+
+ranks_ddt <- ordranks(new_fish, paired = FALSE) # will censor at highest DL in column
+euclid_ddt <- dist(ranks_ddt) # Euclidean is default
+euclid_ddt # for example sites 1, 5 and 6 have young fish and are similar with low numbers
+```
+
+## NMNDS on Euclidean rank matrix
+```{r}
+# vegan package
+ddt_eumds <- metaMDS(euclid_ddt)
+ordiplot(ddt_eumds, type = "text", main = "NMDS of rank of DDT concentrations") # there is an error but the plot still gets produced
+
+# points not on top of eachother
+```
+
+## ANOSIM test on rakned group differences
+
+```{r}
+rnk_ano <- anosim(euclid_ddt, FishDDT$Age)
+rnk_ano #  significant but slightly higher
+
+anosimPlot(rnk_ano)
+```
+
+## Cluster on ranks of concentrations
+```{r}
+rankclust <- hclust(euclid_ddt, method = "average")
+plot(rankclust)
+# young fish are the rows 1,6, 24, 25, 5, 26
+```
+
+## Trend test on ranks
+
+* Are the distances between ranks correlated with time? 
+
+```{r}
+time_dist # from earlier - manhattan
+ddt_ranks <- mantel(time_dist, euclid_ddt, method = "kendall", permutations = 999)
+ddt_ranks # higher than all the other results, significant
+
+densityplot(permustats(ddt_ranks), main = "Multivariate Mann-Kendall Test")
+```
+
+## Multivariate methos on u-scores (for data with multiple reporting limits)
+
+* compute the distance measure
+* compute the same multivariate procedures
+
+```{r}
+# slightly altered to add new detection limits - low and high end of intervals
+FishDDTalt
+```
+
+# u-scores
+
+* a measure of order within a variable
+* the sum of the number of observations that the ith value is above minus the number ith is below
+* the basis of the Mann-Whitney, Kendall's tau and other methods
+* Euclidean distance on either the u-scores or the ranks of the u-scores
+* author recommends ranks rather than scores
+
+Functions
+* `uscores()` computes with 0/1 indicator
+* `uscoresi()` computes using low, high format
+* `uMDS()` computes Euclidean distances between scores (or ranked scores) then plots
+
+
+## Computing u-scores for NMDS
+
+```{r}
+alt <- FishDDTalt %>% 
+  dplyr::select(-Age, -Date, -Site)
+
+u_scores <- uscoresi(alt, paired = FALSE) # ranks of the uscores
+u_euclid_ddt <- dist(u_scores) # Euclidean_dist
+uMDS(u_scores, group = FishDDTalt$Age, title = "NMDS of rank(u-scores) for DDT concentrations") 
+
+u_sc2 <- uscoresi(alt, paired = FALSE, rnk = FALSE) # uscores not ranks 
+uMDS(u_sc2, group = FishDDTalt$Age, title = "NMDS of u-scores (not ranks) for DDT concentrations")
+```
+
+## ANOSIM test on uscore group differences
+
+```{r}
+u_ano <- anosim(u_euclid_ddt, FishDDT$Age)
+u_ano # lower p-value than with ranks at highest DL
+
+anosimPlot(u_ano)
+```
+
+## Cluster analysis using uscores
+
+```{r}
+uclust <- hclust(u_euclid_ddt, method = "average")
+plot(uclust)
+```
+
+## Trend analysis using uscores
+
+* triangles are dist between uscores of concentrations and dist btw times (manhattan btw years)
+
+```{r}
+ddt_utrend <- mantel(time_dist, u_euclid_ddt, method = "kendall", permutations = 999)
+ddt_utrend
+# very significant
+# trend in pattern of DDT and its degradation of prducts over time
+# test statistic of 0.432 is over four times the 99th percentile of permutations
+densityplot(permustats(ddt_utrend), main = "Multivariate Mann-Kendall Test")
+```
+
+# Exercises
+
+## Dataset
+
+* Microbial source tracking (MST) markers to detect fecal pollution
+* Interval censored format where (0 to MDL) indicates values below DL
+* non-zero lower ends indicate either MDL to QL or above QL
+* Entero1A lo and hi general fecal pollution indicators
+
+To do:
+* test whether pattern of six MST markers plus Entero1A indicators differ amongst five sites using ANOSIM
+* test whether there is a trend between the MST markers v Entero1A using mantel test
+
+```{r}
+Markers # note that one row has NAs
+
+# new dataset without site
+m2_new <- Markers %>% 
+  drop_na()
+
+m2 <- m2_new %>% 
+  dplyr::select(-Site_Name) 
+
+sites <- m2_new$Site_Name
+
+m2_uscores <- uscoresi(m2, paired = FALSE) # ranks of the uscores
+m2_euclid <- dist(m2_uscores) # Euclidean_dist
+```
+
+```{r}
+m2_ano <- anosim(m2_euclid, sites)
+m2_ano # lower p-value than with ranks at highest DL
+
+anosimPlot(m2_ano) # significant and higher than most of the permutations
+
+uMDS(m2_uscores, group = sites, title = "NMDS of rank(u-scores) for markers and entero") 
+# Miami Central mostly on the right
+# Bakers Haulover mostly on left
+```
+
+Test trend
+
+```{r}
+# mst data
+m3 <- m2_new %>% 
+  select(1:12) # remove sites and entero
+
+m3_uscores <- uscoresi(m3)
+m3_euclid <- dist(m3_uscores) # euclidean
+
+# entero data
+ent <- m2_new %>% 
+  select(starts_with("Entero"))
+
+ent_uscores <- uscoresi(ent)
+ent_euclid <- dist(ent_uscores) # euclidean
+
+# mantel analysis
+m3_utrend <- mantel(m3_euclid, ent_euclid, method = "kendall", permutations = 999)
+m3_utrend # significant
+densityplot(permustats(m3_utrend), main = "Multivariate Mann-Kendall Test")
+
+# plot
+tibble(ent_euclid,
+       m3_euclid,
+       sites = rep(sites, 14)) %>% 
+  ggplot(aes(ent_euclid, m3_euclid)) + 
+  geom_point(aes(colour = sites)) +
+  geom_smooth() + 
+  theme(legend.position = "bottom") +
+  labs(title = "Correlation of distance matrix of rank(uscores)",
+       x = "Entero Euclidean distances",
+       y = "MST Euclidean distances",
+       colour = NULL)
+
+
+```
+
+# Extra
+
+Determine which MST markers have the highest correlation with Entero1A values
+
+```{r}
+bioenv(comm = ent_euclid, env = m3_uscores, method = "kendall")
+# the highest concentration is the HF183 marker
+
+tibble(ent = ent_uscores,
+       hf183 = m3_uscores[,4]) %>% # the fourth column
+         ggplot(aes(ent, hf183)) +
+         geom_point() 
+```
+
