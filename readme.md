@@ -8,7 +8,7 @@ https://practicalstats.com/training/nada.php
 
 Data from: https://practicalstats.com/resources/NADA-resources/NADA2-Online-3_9.zip
 
-Use the `datasets_download.R` script to download these datasets if needed
+Use the `datasets_download.R` script to download the handouts and datasets (if needed)
 
 ## Outline
 
